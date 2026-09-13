@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>My Favorites Gallery</title>
+<style>
+:root{--bg:#0d0f12;--panel:#15181d;--text:#f1f3f5;--muted:#9aa3ad;--line:#252a31;--accent:#8b5cf6}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{position:sticky;top:0;z-index:10;background:rgba(13,15,18,.96);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);padding:14px}
+.top{max-width:1500px;margin:auto}.brand{font-size:22px;font-weight:800;margin-bottom:12px}
+.controls{display:grid;grid-template-columns:2fr repeat(4,1fr);gap:8px}
+input,select{width:100%;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:9px;padding:10px;outline:none}
+.stats{max-width:1500px;margin:14px auto 0;color:var(--muted);display:flex;gap:18px;flex-wrap:wrap}
+main{max-width:1500px;margin:auto;padding:16px}
+.grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;cursor:pointer;transition:.15s}
+.card:hover{transform:translateY(-2px);border-color:#444}
+.cover{aspect-ratio:2/3;background:#20242a;overflow:hidden}.cover img{width:100%;height:100%;object-fit:cover;display:block}
+.info{padding:9px}.title{font-weight:700;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.meta{color:var(--muted);font-size:12px;margin-top:6px}.chips{display:flex;gap:4px;flex-wrap:wrap;margin-top:7px}
+.chip{background:#232731;color:#cbd0d7;border-radius:999px;padding:3px 7px;font-size:11px}
+#empty{text-align:center;color:var(--muted);padding:60px}
+dialog{width:min(900px,94vw);max-height:90vh;background:#111419;color:var(--text);border:1px solid var(--line);border-radius:14px;padding:0}
+dialog::backdrop{background:rgba(0,0,0,.75)}.modal{padding:18px}.close{float:right;background:#252a31;color:white;border:0;border-radius:8px;padding:7px 10px}
+.modal-cover{width:190px;max-width:40%;float:left;margin:0 18px 12px 0;border-radius:8px}.modal h2{margin-top:0}.section{margin-top:18px}.section h3{font-size:13px;color:var(--muted);text-transform:uppercase}
+.modal a{color:#b99cff}.links{display:flex;gap:6px;flex-wrap:wrap}.link{background:#20242b;padding:5px 8px;border-radius:7px;text-decoration:none}
+@media(max-width:1200px){.grid{grid-template-columns:repeat(5,1fr)}}@media(max-width:900px){.grid{grid-template-columns:repeat(4,1fr)}.controls{grid-template-columns:1fr 1fr}}@media(max-width:600px){header{padding:10px}.grid{grid-template-columns:repeat(3,1fr);gap:7px}main{padding:8px}.info{padding:7px}.title{font-size:12px}.meta{font-size:10px}.chips{display:none}.controls{grid-template-columns:1fr 1fr}.controls input{grid-column:1/-1}.modal-cover{float:none;max-width:100%;width:100%;max-height:55vh;object-fit:contain}}
+</style>
+</head>
+<body>
+<header><div class="top">
+<div class="brand">📚 My Favorites</div>
+<div class="controls">
+<input id="search" placeholder="Search title, ID, artist, group, tag...">
+<select id="artist"><option value="">All artists</option></select>
+<select id="tag"><option value="">All tags</option></select>
+<select id="language"><option value="">All languages</option></select>
+<select id="sort"><option value="recent">Newest added</option><option value="favorites">Most favorites</option><option value="pages">Most pages</option><option value="id">ID</option><option value="title">Title</option></select>
+</div>
+<div class="stats"><span id="count"></span><span id="total"></span></div>
+</div></header>
+<main><div id="grid" class="grid"></div><div id="empty" hidden>No matching galleries.</div></main>
+<dialog id="dlg"><div class="modal" id="modal"></div></dialog>
+<script>
+let all=[], filtered=[];
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const names=(g,k)=>g[k]?.map(x=>x.name)||[];
+async function init(){
+ all=await (await fetch('./data.json')).json();
+ $('#total').textContent=`${all.length} entries loaded`;
+ fillSelect('#artist',unique(all.flatMap(g=>names(g,'artists'))));
+ fillSelect('#tag',unique(all.flatMap(g=>names(g,'tags'))));
+ fillSelect('#language',unique(all.flatMap(g=>names(g,'languages'))));
+ bind(); render();
+}
+function unique(a){return [...new Set(a)].sort((a,b)=>a.localeCompare(b))}
+function fillSelect(sel,vals){$(sel).innerHTML='<option value="">All</option>'+vals.map(v=>`<option>${esc(v)}</option>`).join('')}
+function bind(){['search','artist','tag','language','sort'].forEach(id=>$( '#'+id).addEventListener('input',render));}
+function render(){
+ const q=$('#search').value.toLowerCase().trim(), ar=$('#artist').value, tg=$('#tag').value, la=$('#language').value;
+ filtered=all.filter(g=>{
+  const hay=[g.id,g.title?.pretty,g.title?.english,g.title?.japanese,...names(g,'artists'),...names(g,'groups'),...names(g,'tags'),...names(g,'parodies'),...names(g,'characters')].join(' ').toLowerCase();
+  return (!q||hay.includes(q))&&(!ar||names(g,'artists').includes(ar))&&(!tg||names(g,'tags').includes(tg))&&(!la||names(g,'languages').includes(la));
+ });
+ const sort=$('#sort').value;
+ filtered.sort((a,b)=>sort==='favorites'?(b.favorites||0)-(a.favorites||0):sort==='pages'?(b.pages||0)-(a.pages||0):sort==='id'?b.id-a.id:sort==='title'?(a.title?.pretty||'').localeCompare(b.title?.pretty||''):new Date(b.collected_at)-new Date(a.collected_at));
+ $('#count').textContent=`Showing ${filtered.length}`;
+ $('#empty').hidden=filtered.length>0;
+ $('#grid').innerHTML=filtered.map(card).join('');
+}
+function card(g){
+ const tags=names(g,'tags').slice(0,3);
+ return `<article class="card" onclick="openModal(${g.id})"><div class="cover"><img loading="lazy" src="${esc(g.cover||'')}" alt="" onerror="this.style.opacity=.2"></div><div class="info"><div class="title">${esc(g.title?.pretty||'Untitled')}</div><div class="meta">#${g.id} · ${g.pages||'?'} pages · ♥ ${g.favorites||0}</div><div class="chips">${tags.map(t=>`<span class="chip">${esc(t)}</span>`).join('')}</div></div></article>`
+}
+function openModal(id){
+ const g=all.find(x=>x.id==id); if(!g)return;
+ const groups=['parodies','tags','artists','groups','characters','languages','categories'];
+ $('#modal').innerHTML=`<button class="close" onclick="dlg.close()">✕</button>
+ <img class="modal-cover" src="${esc(g.cover||'')}" onerror="this.style.opacity=.2">
+ <h2>${esc(g.title?.pretty||'Untitled')}</h2><div class="meta">ID ${g.id} · ${g.pages||'?'} pages · ♥ ${g.favorites||0}</div>
+ <p><a href="${esc(g.url)}" target="_blank">Open original page ↗</a></p>
+ ${groups.map(k=>`<div class="section"><h3>${k}</h3><div class="links">${names(g,k).map((n,i)=>{const o=g[k][i];return `<a class="link" href="${esc(o.url||'#')}" target="_blank">${esc(n)}</a>`}).join('')||'<span class="meta">None</span>'}</div></div>`).join('')}`;
+ dlg.showModal();
+}
+const dlg=$('#dlg');dlg.addEventListener('click',e=>{if(e.target===dlg)dlg.close()});
+init().catch(e=>{console.error(e);$('#empty').hidden=false;$('#empty').textContent='Could not load data.json';});
+</script>
+</body></html>
